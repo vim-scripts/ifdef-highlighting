@@ -1,8 +1,10 @@
 " Description: C Preprocessor Highlighting
+" Language: Preprocessor on top of c, cpp, idl syntax
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Modified: Jan2004
-" Version: 2.3
-" Copyright 2002, 2003 Michael Geddes
+" Modified: August 2004
+" Version: 3.0
+"
+" Copyright 2002-2004 Michael Geddes
 " Please feel free to use, modify & distribute all or part of this script,
 " providing this copyright message remains.
 " I would appreciate being acknowledged in any derived scripts, and would
@@ -30,6 +32,13 @@
 "
 " Specifying '*' by itself equates to '\k\+' and allows
 " setting of the default to be defined/undefined.
+" Caveat:
+" Don't expect an #else/#endif inside an open bracket '(' to match the #ifdef
+" correctly.  This is almost impossible to do without messing up the error-in
+" bracket code.
+" Currently #else/#endif that are inside brackets where the #ifdef is outside
+" will be highlighted as 'Special', you may wish to hilight it as an error. >
+"   hi link ifdefElseEndifInBracketError Error
 "
 " NB: On 16bit and win32s windows builds, the default for ifdef_filename is
 " '_defines'.  I've assumed that win32 apps can handle '.defines'.
@@ -49,14 +58,13 @@
 " g:ifdef_modelines overrides &modelines for how many lines to look at.
 "
 " Hilighting:
-" ifdefIfZero (default Comment)          - Inside #if 0 hilighting
-" ifdefIfOut (default Debug)             - The #ifdef/#else/#endif/#elseif
-" ifdefIDefine (default PreCondit)       - Other defines where the defines are valid
-" ifdefInBadPreCondit (default PreCondit)- The #ifdef/#else/#endif/#elseif in an invalid section.
-" ifdefOutComment (default ifdefIfOut)   - A C/C++ comment inside a an invalid section
-" ifdefPreCondit1 (defualt PreCondit)    - The #ifdef/#else/#endif/#elseif in a valid section
-" ifdefInclude (default Include)         - #include hilighting
-"
+" ifdefIfZero (default Comment)                     - Inside #if 0 highlighting
+" ifdefUndefined (default Debug)                    - The #ifdef/#else/#endif/#elseif
+" ifdefNeutralDefine (default PreCondit)            - Other defines where the defines are valid
+" ifdefInBadPreCondit (default PreCondit)           - The #ifdef/#else/#endif/#elseif in an invalid section.
+" ifdefInUndefinedComment (default ifdefUndefined)  - A C/C++ comment inside a an invalid section
+" ifdefPreCondit1 (defualt PreCondit)               - The #ifdef/#else/#endif/#elseif in a valid section
+" ifdefElseEndifInBracketError (default Special)    - Usupported #else/#endif inside a bracket '('.
 " ------------------------------
 " Alternate (old) usage.
 " Call CIfDef() after sourcing the c/cpp syntax file.
@@ -66,10 +74,20 @@
 "
 "
 " History:
+" 3.0
+"   - Renamed everything to be more clear, and reversed some of the include
+"   groups from exclude groups - make use of ALL in groups. This seems to have
+"   fixed most bugs, but may have reintroduced some as well, however doing it
+"   this way round should prevent most interaction with other scripts.
+"   KNOWN issues: Comments at the end of #ifndef, #else don't always highlight.
+"   - Actually clear the cPreCondit highlight group as we are taking it over.
+"     Ditto cCppOut (#if 0) handling
+" 2.4
+"   - Prevent interaction with c brackets (Picked up by Dany St-Amant)
 " 2.3
 "   - Clean up some of the comments
 "   - Ignore whitespace in .defines files. (TODO: Credit person who suggested this!)
-"   - Add comments for hilighting groups.
+"   - Add comments for highlighting groups.
 " 2.2
 "   - Add support for idl files.
 "   - Suggestions from
@@ -106,10 +124,23 @@
 "
 
 "
+if exists('b:current_syntax') && b:current_syntax =~ 'ifdef'
+  finish
+endif
 
-" Settings for the c.vim hilighting .. disable the default preprocessor handling.
-let cpreproc_comment=0
+if !exists('b:current_syntax')
+  let b:current_syntax = "ifdef"
+else
+  let b:current_syntax = b:current_syntax.'+ifdef'
+endif
+
+
+" Settings for the c.vim highlighting .. disable the default preprocessor handling.
 let c_no_if0=1
+syn clear cPreCondit
+syn clear cCppOut
+syn clear cCppOut2
+syn clear cCppSkip
 
 " Reload protection
 if !exists('ifdef_loaded') || exists('ifdef_debug')
@@ -133,53 +164,58 @@ function! CIfDef()
   call s:CIfDef(0)
 endfun
 
-" Load the C ifdef hilighting.
+" Load the C ifdef highlighting.
 function! s:CIfDef(force)
   if ! a:force &&  exists('b:ifdef_syntax')
       return
   endif
   let b:ifdef_syntax=1
-  " Redefine some standards - defines/pragmas/lines/warnings etc.
-  syn region  ifdefIDefine    start="^\s*#\s*\(define\|undef\)\>" skip="\\$" end="$" contained contains=ALLBUT,@cPreProcGroup keepend
-  syn region  ifdefPreProc  start="^\s*#\s*\(pragma\>\|line\>\|warning\>\|warn\>\|error\>\)" skip="\\$" end="$" contained contains=ALLBUT,@cPreProcGroup keepend
-  syn match ifdefInclude  "^\s*#\s*include\>\s*["<]" contained contains=cIncluded
 
-  "Standards
-  syn cluster ifdefGoodIfExclude contains=ifdefInParen,cUserLabel,cppMethodWrapped,ifdefOutIf,cIncluded,cErrInParen,cErrInBracket,cCppOut2,@cPreProcGroup,@cParenGroup
-  " Bad spaces additions
-  syn cluster ifdefGoodIfExclude add=cErrInBracket
+  " Some useful groups.
+  syn cluster ifdefClusterCommon contains=TOP,cPreCondit
+  syn cluster ifdefClusterNeutral contains=@ifdefClusterCommon,ifdefDefined,ifdefUndefined,ifdefNeutral.*,ifdefInNeutralIf
+  syn cluster ifdefClusterDefined contains=@ifdefClusterCommon,ifdefDefined,ifdefUndefined,ifdefNeutral.*,ifdefInNeutralIf
+  syn cluster ifdefClusterUndefined contains=ifdefInUndefinedComment,ifdefInUndefinedIf 
 
-  " Specific to this problem
-  syn cluster ifdefGoodIfExclude add=ifdefInElse,ifdefOutComment,ifdefOutIf,ifdefOutPreCondit,cErrInBracket
+  syn region ifdefCommentAtEnd contained start=+//+ end='$' skip='\\$' contains=cSpaceError
+  syn region ifdefCommentAtEnd contained start=+/\*+ end='\*/' contains=cSpaceError nextgroup=ifdefCommentAtEnd
 
-  " Now add to all the c/rc/idl clusters
-  syn cluster cParenGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
-  syn cluster cPreProcGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
-  syn cluster cMultiGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
-  syn cluster rcParenGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
-  syn cluster rcGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
-  syn cluster idlCommentable add=ifdefOutComment,ifdefOutIf,ifdefInElse
 
   " #if .. #endif  nesting
-  syn region ifdefInIf matchgroup=ifdefPreCondit1 start="^\s*#\s*\(if\>\|ifdef\>\|ifndef\>\).*$" matchgroup=ifdefPreCondit1 end="^\s*#\s*endif\>.*$" contained contains=ALLBUT,@ifdefGoodIfExclude
+  syn region ifdefOutsideNeutral matchgroup=ifdefPreCondit1 start="^\s*#\s*\(if\>\|ifdef\>\|ifndef\>\)\(/[/*]\@!\|[^/]\)*" matchgroup=ifdefPreCondit1 end="^\s*#\s*endif\>.*$" contains=@ifdefClusterNeutral,ifdefElseInDefinedNeutral,cComment,cCommentL
+  " #if .. #endif  nesting
+  syn region ifdefInNeutralIf matchgroup=ifdefPreCondit1 start="^\s*#\s*\(if\>\|ifdef\>\|ifndef\>\).*$" matchgroup=ifdefPreCondit1 end="^\s*#\s*endif\>.*$" contained contains=@ifdefClusterNeutral,ifdefElseInDefinedNeutral,cComment,cCommentL
+  syn region ifdefInUndefinedIf matchgroup=ifdefPreConditBad start="^\s*#\s*\(if\>\|ifdef\>\|ifndef\>\).*$" matchgroup=ifdefPreConditBad end="^\s*#\s*endif\>" contained contains=@ifdefClusterUndefined,ifdefElseInUndefinedNeutral,cCommentL,cComment skipwhite nextgroup=ifdefCommentAtEnd
 
-  syn region ifdefOutIf matchgroup=ifdefPreCondit2 start="^\s*#\s*\(if\>\|ifdef\>\|ifndef\>\).*$" matchgroup=ifdefPreCondit2 end="^\s*#\s*endif\>.*$" contained contains=ifdefOutIf,ifdefOutComment,ifdefOutPreCondit
-
-  " #else hilighting for nesting
-  syn region ifdefInPreCondit start="^\s*#\s*\(elif\>\|else\>\)" skip="\\$" end="$" contained contains=cComment,cSpaceError
-  syn region ifdefOutPreCondit start="^\s*#\s*\(elif\>\|else\>\)" skip="\\$" end="$" contained contains=cComment,cSpaceError
+  " #else highlighting for nesting
+  syn match ifdefElseInDefinedNeutral "^\s*#\s*\(elif\>\|else\>\)" contained skipwhite
+  syn match ifdefElseInUndefinedNeutral "^\s*#\s*\(elif\>\|else\>\)" contained skipwhite nextgroup=ifdefCommentAtEnd
 
   " #if 0 matching
-  syn region ifdefIfOut  matchgroup=ifdefPreCondit4 start="^\s*#\s*if\s\+0\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=ifdefOutIf,ifdefInBadPreCondit,cComment,ifdefInElse
+  syn region ifdefUndefined  matchgroup=ifdefPreCondit4 start="^\s*#\s*if\s\+0\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=@ifdefClusterUndefined,ifdefElseInUndefinedToDefined
 
   " #else handling .. switching to out group
-  syn region ifdefOutElse matchgroup=ifdefPreCondit3 start="^\s*#\s*else" end="^\s*#\s*endif"me=s-1 contained contains=ifdefOutIf,ifdefInBadPreCondit,ifdefOutComment
+  syn region ifdefElseInDefinedToUndefined matchgroup=ifdefPreCondit3 start="^\s*#\s*else\>" end="^\s*#\s*endif\>"me=s-1 contained contains=@ifdefClusterUndefined
+  " #else handling .. switching to in group
+  syn region ifdefElseInUndefinedToDefined matchgroup=ifdefPreCondit6 start="^\s*#\s*else\>" end="^\s*#\s*endif\>"me=s-1 contained contains=@ifdefClusterDefined
 
-  syn region ifdefInElse matchgroup=ifdefPreCondit6 start="^\s*#\s*else" end="^\s*#\s*endif"me=s-1 contained contains=ALLBUT,@ifdefGoodIfExclude
+  " Handle #else, #endif inside a bracket. Not really an error, but impossible
+  " to work out.
+  syn match ifdefElseEndifInBracketError "^\s*#\s*\(elif\>\|else\>\|endif\>\)" contained containedin=cParen
 
-  " comment hilighting
-  syntax region ifdefOutComment start="/\*" end="\*/" contained contains=cCharacter,cNumber,cFloat,cSpaceError
-  syntax match  ifdefOutComment "//.*" contained contains=cCharacter,cNumber,cSpaceError
+  " comment highlighting
+  syntax region ifdefInUndefinedComment start="/\*" end="\*/" contained contains=cCharacter,cNumber,cFloat,cSpaceError
+  syntax match  ifdefInUndefinedComment "//.*" contained contains=cCharacter,cNumber,cSpaceError
+
+  " Now add to all the c/rc/idl clusters
+  syn cluster cParenGroup add=ifdefInUndefined.*,ifdefElse.*,ifdefInNeutralIf
+  syn cluster cPreProcGroup add=ifdefInUndefined.*,ifdefElse.*,ifdefInNeutralIf
+  syn cluster cMultiGroup add=ifdefInUndefined.*,ifdefElse.*,ifdefInNeutralIf
+  syn cluster rcParenGroup add=ifdefInUndefined.*,ifdefElse.*,ifdefInNeutralIf
+  syn cluster rcGroup add=ifdefInUndefined.*,ifdefElse.*,ifdefInNeutralIf
+
+  " Include group - so reverse
+  syn cluster idlCommentable add=ifdefUndefined,ifdefDefined
 
   " Start sync from scratch
   syn sync fromstart
@@ -190,16 +226,16 @@ endfunction
 " Note that the regular expression is use with \< \> arround it.
 fun! Define(define)
   call CIfDef()
-  exe 'syn region ifdefIfOut  matchgroup=ifdefPreCondit4 start="^\s*#\s*ifndef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=ifdefOutIf,ifdefInBadPreCondit,ifdefOutComment,ifdefInElse'
-  exe 'syn region ifdefIfIn matchgroup=ifdefPreCondit5 start="^\s*#\s*ifdef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit5 end="^\s*#\s*endif" contains=ALLBUT,@ifdefGoodIfExclude'
+  exe 'syn region ifdefUndefined  matchgroup=ifdefPreCondit4 start="^\s*#\s*ifndef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=@ifdefClusterUndefined,ifdefElseInUndefinedToDefined'
+  exe 'syn region ifdefDefined matchgroup=ifdefPreCondit5 start="^\s*#\s*ifdef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit5 end="^\s*#\s*endif" contains=@ifdefClusterDefined,ifdefElseInDefinedToUndefined'
 endfun
 
 " Mark a (regexp) definition as not defined.
 " Note that the regular expression is use with \< \> arround it.
 fun! Undefine(define)
   call CIfDef()
-  exe 'syn region ifdefIfOut  matchgroup=ifdefPreCondit4 start="^\s*#\s*ifdef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=ifdefOutIf,ifdefInBadPreCondit,ifdefOutComment,ifdefInElse'
-  exe 'syn region ifdefIfIn matchgroup=ifdefPreCondit5 start="^\s*#\s*ifndef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit5 end="^\s*#\s*endif" contains=ALLBUT,@ifdefGoodIfExclude'
+  exe 'syn region ifdefUndefined  matchgroup=ifdefPreCondit4 start="^\s*#\s*ifdef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=@ifdefClusterUndefined,ifdefElseInUndefinedToDefined'
+  exe 'syn region ifdefDefined matchgroup=ifdefPreCondit5 start="^\s*#\s*ifndef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit5 end="^\s*#\s*endif" contains=@ifdefClusterDefined,ifdefElseInUndefinedToDefined'
 
 endfun
 
@@ -248,6 +284,7 @@ function! s:CheckDirForFile(directory,file)
   endwhile
   " Check the two cases we haven't tried
   if aborted | let aborted=!filereadable(cur.slsh.a:file) | endif
+
   return ((aborted==0) ? cur.slsh : '')
 endfun
 
@@ -309,20 +346,24 @@ endfun
 
 "  hi default ifdefIfZero term=bold ctermfg=1 gui=italic guifg=DarkSeaGreen
 hi default link ifdefIfZero Comment
-hi default link ifdefIfOut Debug
-hi default link ifdefOutIf ifdefIfOut
-hi default link ifdefOutElse ifdefIfOut
-hi default link ifdefIDefine PreCondit
+hi default link ifdefCommentAtEnd Comment
+hi default link ifdefUndefined Debug
+hi default link ifdefInUndefinedIf ifdefUndefined
+hi default link ifdefElseInDefinedToUndefined ifdefUndefined
+hi default link ifdefNeutralDefine PreCondit
+hi default link ifdefNeutralPreProc PreProc
+hi default link ifdefElseInDefinedNeutral PreCondit
+hi default link ifdefElseInUndefinedNeutral PreCondit
 hi default link ifdefInBadPreCondit PreCondit
-hi default link ifdefOutComment ifdefIfOut
+hi default link ifdefInUndefinedComment ifdefUndefined
 hi default link ifdefOutPreCondit ifdefInBadPreCondit
 hi default link ifdefPreCondit1 PreCondit
-hi default link ifdefPreCondit2 ifdefInBadPreCondit
+hi default link ifdefPreConditBad ifdefInBadPreCondit
 hi default link ifdefPreCondit3 ifdefPreCondit1
 hi default link ifdefPreCondit4 ifdefPreCondit1
 hi default link ifdefPreCondit5 ifdefPreCondit1
 hi default link ifdefPreCondit6 ifdefPreCondit1
-hi default link ifdefInclude Include
+hi default link ifdefElseEndifInBracketError Special
 
 call s:CIfDef(1)
 call IfdefLoad()
