@@ -1,25 +1,34 @@
-" Description: c preprocessor commenting 
+" Description: C Preprocessor Highlighting
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Modified: Dec2002 
-" Version: 2.0
+" Modified: Jan2003
+" Version: 2.1
+" Copyright 2002, 2003 Michael Geddes
+" Please feel free to use, modify & distribute all or part of this script,
+" providing this copyright message remains.
+" I would appreciate being acknowledged in any derived scripts, and would 
+" appreciate and welcome any updates, modifications or suggestions.
 
 " Usage:
-" Use as a syntax plugin (source ifdef.vim from ~/vimfiles/syntax/cpp.vim -
+" Use as a syntax plugin (source ifdef.vim from ~/vimfiles/after/syntax/cpp.vim -
 " also c.vim and idl.vim )
 " To specify which defines are valid/invalid, the scripts searches two places.
 " 	* Firstly, the current directory, and all higher directories are search for
-" 	  the file '.defines' (first one found gets used)
+" 	  the file specified in g:ifdef_filename - which defaults to '.defines'
+" 	  (first one found gets used)  
 " 	* Secondly, modelines prefixed by 'vim_ifdef:' are searched for within the
 " 	  current file being loaded.  You can either use the vim default settings
 " 	  for modeline/modelines, or these can be overridden by using
 " 	  ifdef_modeline and ifdef_modelines.
 " The defines/undefines are addeded in order.  Lines must be prefixed with
-" 'defined=' or 'undefined=' and contain a ';' separated list of keywords.
+" 'defined=' or 'undefined=' and contain a ';' or ',' separated list of keywords.
 " Keywords may be regular expressions, though use of '\k' rather than '.' is
 " highly recommended. 
 "
 " Specifying '*' by itself equates to '\k\+' and allows
 " setting of the default to be defined/undefined.
+"
+" NB: On 16bit and win32s windows builds, the default for ifdef_filename is
+" '_defines'.  I've assumed that win32 apps can handle '.defines'.
 "
 " Examples: 
 " ----.defines-------
@@ -42,6 +51,12 @@
 " g:ifdef_modelines overrides &modelines for how many lines to look at.
 "
 " History:
+" 2.1 
+" 	- Fixes from Erik Remmelzwaal
+" 		- Need to use %:p:h instead of %:h to get directory
+" 		- Documentation fixes/updates
+" 		- Added ability to parse ',' or ';' separated lists instead of fixing
+" 		  the documentation ;)
 " 2.0:
 " 	- Added loading of ifdefs
 " 		- via ifdef modelines
@@ -61,6 +76,9 @@
 "   - Turn of #if 0 properly - this script handles it! 
 "   - prefix 'ifdef' to all groups 
 "   - Use some c 'clusters' to get rid of some inhouse code 
+"
+"   TODO: (Feel free to contact me with suggestions)
+"   	- Allow defined= and undefined= on the same line in modelines.
 
 let cpreproc_comment=0
 let c_no_if0=1
@@ -200,9 +218,9 @@ fun! s:ReadFile( dir, filename)
 	endif
 endfun
 
-" Define/undefine a ';' separated list
+" Define/undefine a ';' or ',' separated list
 fun! s:DoDefines( define, defines)
-	let reBreak='[^;]*'
+	let reBreak='[^;,]*'
 	let here=0
 	let back=strlen(a:defines)
 	while here<back
@@ -224,7 +242,7 @@ endfun
 
 " Load ifdefs for a file
 fun! IfdefLoad()
-	let txt=s:ReadFile(expand('%:h'),g:ifdef_filename)
+	let txt=s:ReadFile(expand('%:p:h'),g:ifdef_filename)
 	if txt!='' && txt !~"[\r\n]$" | let txt=txt."\n" | endif
 	let txt=txt.s:ReadDefineModeline()
 	let reCr="[^\n\r]*[\r\n]*"
