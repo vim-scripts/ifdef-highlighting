@@ -1,7 +1,7 @@
 " Description: C Preprocessor Highlighting
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
 " Modified: Jan2003
-" Version: 2.1
+" Version: 2.2
 " Copyright 2002, 2003 Michael Geddes
 " Please feel free to use, modify & distribute all or part of this script,
 " providing this copyright message remains.
@@ -51,6 +51,11 @@
 " g:ifdef_modelines overrides &modelines for how many lines to look at.
 "
 " History:
+" 2.2
+" 	- Add support for idl files.
+" 	- Suggestions from
+" 		- Check for 'shell' type and 'shellslash'
+" 		- Don't use has("windows"), which is different.
 " 2.1 
 " 	- Fixes from Erik Remmelzwaal
 " 		- Need to use %:p:h instead of %:h to get directory
@@ -121,6 +126,7 @@ function! s:CIfDef(force)
   syn cluster cMultiGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
   syn cluster rcParenGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
   syn cluster rcGroup add=ifdefOutComment,ifdefOutIf,ifdefInElse
+  syn cluster idlCommentable add=ifdefOutComment,ifdefOutIf,ifdefInElse
 
   " #if .. #endif  nesting
   syn region ifdefInIf matchgroup=ifdefPreCondit1 start="^\s*#\s*\(if\>\|ifdef\>\|ifndef\>\).*$" matchgroup=ifdefPreCondit1 end="^\s*#\s*endif\>.*$" contained contains=ALLBUT,@ifdefGoodIfExclude
@@ -211,10 +217,11 @@ endfun
 fun! s:ReadFile( dir, filename)
     let realdir= s:CheckDirForFile( a:dir, a:filename )
     if realdir=='' | return '' | endif
-	if has('windows')
+	" if has('dos16') || has('gui_win32s') || has('win16') || ha
+	if !has('unix') && !&shellslash && &shell !~ 'sh[a-z.]*$'
 		return system('type "'.fnamemodify(realdir,':gs?/?\\?.').a:filename.'"')
 	else
-		return system( 'cat "'.realdir.a:filename.'"' )
+		return system( 'cat "'.escape(realdir.a:filename,'\$*').'"' )
 	endif
 endfun
 
