@@ -1,0 +1,6 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=7
+
+Provides highlighting for  #ifdef  #ifndef  #else  #endif  blocks, with the ability to mark a symbol as defined or undefined.
+Handles nesting of #ifdefs (and #if) as well, but does not handle  #if defined().
+
+Supports vim_ifdef:  modelines and .defines (_defines for win16/win32s) files to specify defined/undefined symbols.
