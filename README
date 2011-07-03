@@ -4,3 +4,5 @@ Provides highlighting for  #ifdef  #ifndef  #else  #endif  blocks, with the abil
 Handles nesting of #ifdefs (and #if) as well, but does not handle  #if defined().
 
 Supports vim_ifdef:  modelines and .defines (_defines for win16/win32s) files to specify defined/undefined symbols.
+
+use :Define <keyword>  or  :Undefine <keyword>     to dynamically specify defined or undefined sections.

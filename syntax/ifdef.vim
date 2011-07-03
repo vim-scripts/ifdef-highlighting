@@ -1,10 +1,10 @@
 " Description: C Preprocessor Highlighting
 " Language: Preprocessor on top of c, cpp, idl syntax
-" Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Modified: August 2004
-" Version: 3.0
+" Author: Michael Geddes <vimmer@frog.wheelycreek.net>
+" Modified: July 2011
+" Version: 3.1
 "
-" Copyright 2002-2004 Michael Geddes
+" Copyright 2002-2011 Michael Geddes
 " Please feel free to use, modify & distribute all or part of this script,
 " providing this copyright message remains.
 " I would appreciate being acknowledged in any derived scripts, and would
@@ -68,12 +68,15 @@
 " ------------------------------
 " Alternate (old) usage.
 " Call CIfDef() after sourcing the c/cpp syntax file.
-" Call Define(keyword) to mark a preprocessor symbol as being defined.
-" Call Undefine(keyword) to mark a preprocessor symbol as not being defined.
+" Use :Define <keyword> or function Define(keyword) to mark a preprocessor symbol as being defined.
+" Use  :Undefine <keyword> or function Undefine(keyword) to mark a preprocessor symbol as not being defined.
 " call Undefine('\k\+') will mark all words that aren't explicitly 'defined' as undefined.
 "
-"
 " History:
+" 3.1
+"  - Wu Hong fixed bug in Undefine()
+"  - Stop errors in script due to undefined hl being cleared.
+"  - Added :Define, :Undefine with completion
 " 3.0
 "   - Renamed everything to be more clear, and reversed some of the include
 "   groups from exclude groups - make use of ALL in groups. This seems to have
@@ -137,10 +140,19 @@ endif
 
 " Settings for the c.vim highlighting .. disable the default preprocessor handling.
 let c_no_if0=1
-syn clear cPreCondit
-syn clear cCppOut
-syn clear cCppOut2
-syn clear cCppSkip
+if hlexists('cPreCondit')
+  syn clear cPreCondit
+endif
+if hlexists('cCppOut')
+  syn clear cCppOut
+endif
+
+if hlexists('cCppOut2')
+  syn clear cCppOut2
+endif
+if hlexists('cCppSkip')
+  syn clear cCppSkip
+endif
 
 " Reload protection
 if !exists('ifdef_loaded') || exists('ifdef_debug')
@@ -175,7 +187,7 @@ function! s:CIfDef(force)
   syn cluster ifdefClusterCommon contains=TOP,cPreCondit
   syn cluster ifdefClusterNeutral contains=@ifdefClusterCommon,ifdefDefined,ifdefUndefined,ifdefNeutral.*,ifdefInNeutralIf
   syn cluster ifdefClusterDefined contains=@ifdefClusterCommon,ifdefDefined,ifdefUndefined,ifdefNeutral.*,ifdefInNeutralIf
-  syn cluster ifdefClusterUndefined contains=ifdefInUndefinedComment,ifdefInUndefinedIf 
+  syn cluster ifdefClusterUndefined contains=ifdefInUndefinedComment,ifdefInUndefinedIf
 
   syn region ifdefCommentAtEnd contained start=+//+ end='$' skip='\\$' contains=cSpaceError
   syn region ifdefCommentAtEnd contained start=+/\*+ end='\*/' contains=cSpaceError nextgroup=ifdefCommentAtEnd
@@ -235,7 +247,7 @@ endfun
 fun! Undefine(define)
   call CIfDef()
   exe 'syn region ifdefUndefined  matchgroup=ifdefPreCondit4 start="^\s*#\s*ifdef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit4 end="^\s*#\s*endif" contains=@ifdefClusterUndefined,ifdefElseInUndefinedToDefined'
-  exe 'syn region ifdefDefined matchgroup=ifdefPreCondit5 start="^\s*#\s*ifndef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit5 end="^\s*#\s*endif" contains=@ifdefClusterDefined,ifdefElseInUndefinedToDefined'
+  exe 'syn region ifdefDefined matchgroup=ifdefPreCondit5 start="^\s*#\s*ifndef\s\+'.a:define.'\>" matchgroup=ifdefPreCondit5 end="^\s*#\s*endif" contains=@ifdefClusterDefined,ifdefElseInDefinedToUndefined'
 
 endfun
 
@@ -367,5 +379,24 @@ hi default link ifdefElseEndifInBracketError Special
 
 call s:CIfDef(1)
 call IfdefLoad()
+
+fun! Find_defines(A, L, P)
+  " Use dictionary to fix uniqueness
+  let l:ret={}
+  let cur=1
+  while cur <= line('$')
+    let line=getline(cur)
+    if line =~ '^\s*#\s*ifn\=def\>\s\+'.a:A
+      let l:find=matchstr(line,'^\s*#\s*ifn\=def\s*\zs\k\+')
+      let ret[l:find]=1
+    endif
+    let cur+=1
+  endwhile
+  " Return the sorted keys of the dictionary
+  return sort(keys(ret))
+endfun
+
+com! -complete=customlist,Find_defines -nargs=1 Define call Define(<q-args>)
+com! -complete=customlist,Find_defines -nargs=1 Undefine call Undefine(<q-args>)
 
 " vim:ts=2 sw=2 et
