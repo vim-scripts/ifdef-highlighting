@@ -2,7 +2,7 @@
 " Language: Preprocessor on top of c, cpp, idl syntax
 " Author: Michael Geddes <vimmer@frog.wheelycreek.net>
 " Modified: July 2011
-" Version: 3.1
+" Version: 3.2
 "
 " Copyright 2002-2011 Michael Geddes
 " Please feel free to use, modify & distribute all or part of this script,
@@ -73,6 +73,8 @@
 " call Undefine('\k\+') will mark all words that aren't explicitly 'defined' as undefined.
 "
 " History:
+" 3.2
+"  - Fix by Dr. Chip for C comment at endof ifdef continuing over line.
 " 3.1
 "  - Wu Hong fixed bug in Undefine()
 "  - Stop errors in script due to undefined hl being cleared.
@@ -190,7 +192,7 @@ function! s:CIfDef(force)
   syn cluster ifdefClusterUndefined contains=ifdefInUndefinedComment,ifdefInUndefinedIf
 
   syn region ifdefCommentAtEnd contained start=+//+ end='$' skip='\\$' contains=cSpaceError
-  syn region ifdefCommentAtEnd contained start=+/\*+ end='\*/' contains=cSpaceError nextgroup=ifdefCommentAtEnd
+  syn region ifdefCommentAtEnd contained extend start=+/\*+ end='\*/' contains=cSpaceError nextgroup=ifdefCommentAtEnd
 
 
   " #if .. #endif  nesting
